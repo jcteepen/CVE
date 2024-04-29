@@ -1,0 +1,135 @@
+##################################################################
+# Syntax Cox regression analyses                                 #
+# Long-term risk and characteristics of cerebrovascular events   #
+# after upper body radiotherapy among childhood cancer survivors #
+# in the DCCSS-LATER cohort                                      #
+##################################################################
+
+##############################
+#############################################
+library(survival)
+library(coxphf)
+library(dplyr)
+library(logistf)
+###################### 
+## Load data
+library(haven)
+data_stroke <- read_sav("H:/Jop/Lisanne upper body RT/Stroke/5. Stroke - ready for first submission/4. Analyse/4. Clean_file/Clean_data_with_variables_for_cox_in_R.sav")
+
+## Only include survivors with >5 years follow-up and available data from medical files. 
+subset_cox <- subset(data_stroke, pat_recrd==2 & FUTime >=5)
+
+## Set radiation dose to missing, when a value of -999 is coded
+subset_cox$BrainDoseCat_samengevoegd[subset_cox$BrainDoseCat_samengevoegd==-999] <- NA
+
+## List variables necessary for cox analyses
+## Adjust for:
+sex<-subset_cox$p_geslacht ## sex <-p_geslacht 
+chemo<-subset_cox$th_ct_2inclrec ## chemo <- th_ct_2inclrec yes/no
+age_cc<-subset_cox$strat_age_cc ## age at childhood cancer diagnosis <- strat_age_cc in categories (1= 0-5 (ref); 2 = >5-10; 3= >10-15; 4= >15-18)
+## Variables in models
+BrainDoseCat_samengevoegd<-subset_cox$BrainDoseCat_samengevoegd
+BrainDoseCatFullPart<-subset_cox$BrainDoseCatFullPart
+BrainDose_PerTien<-subset_cox$BrainDose_PerTien
+
+## time scale -> attained age
+entryage <- subset_cox$age_beginFU
+exitage <- subset_cox$age_endFU
+stroke <- subset_cox$filter_stroke
+
+########## Cox regression analysis Tabel 4 Model 1 
+## Sex, age, chemo, Brain dose 4 categories
+## 1 'RT to the neck, thorax, spine' 
+## 2 'Brain RT, dose >0 and <25 Gy'
+## 3 'Brain RT, dose >25 and <50 Gy'
+## 4 'Brain RT, dose >50 Gy.
+
+modelA <- coxph(Surv(time=entryage,time2=exitage,event=stroke) ~ sex+ chemo + as.factor(age_cc) + as.factor(BrainDoseCat_samengevoegd), data=subset_cox)
+summary(modelA)
+
+#Calculate AIC
+extractAIC(modelA)
+
+#Check proportional hazards assumption
+test.ph<- cox.zph(modelA)
+test.ph
+
+##############################
+########## Cox regression analysis Tabel 4 Model 2 
+## Sex, age, chemo , Brain dose categories with >25 Gy stratified by full and partial volume
+##1 'RT to the neck, thorax, spine' 
+##2 'Brain RT, dose <=25 Gy'
+##3 'Brain RT, dose >25 Gy _ Full'
+##4 'Brain RT, dose >25 Gy _ Partial'.
+
+modelB <- coxph(Surv(time=entryage,time2=exitage,event=stroke) ~ sex+ chemo + as.factor(age_cc) + as.factor(BrainDoseCatFullPart), data=subset_cox)
+summary(modelB)
+
+#Calculate AIC
+extractAIC(modelB)
+
+#Check proportional hazards assumption
+test.ph<- cox.zph(modelB)
+test.ph
+
+##############################
+## Analyses appendices
+##############################
+########## Cox regression analysis Supplementary Table 2 Model 1 (hemorrhagic)
+## Sex, age, chemo , Brain dose categories with >25 Gy stratified by full and partial volume
+##1 'RT to the neck, thorax, spine' 
+##2 'Brain RT, dose <=25 Gy'
+##3 'Brain RT, dose >25 Gy _ Full'
+##4 'Brain RT, dose >25 Gy _ Partial'.
+
+subset_cox$strokehemo <- ifelse(subset_cox$strokedef==0, 0, 
+                                ifelse((subset_cox$type_eerste_stroke==3), 1, 
+                                       ifelse((subset_cox$type_eerste_stroke==1 | subset_cox$type_eerste_stroke==2), 0, NA)))
+
+modelC <- coxph(Surv(time=entryage,time2=exitage,event=strokehemo) ~ sex+ chemo + as.factor(age_cc) + as.factor(BrainDoseCat_samengevoegd), data=subset_cox)
+summary(modelC)
+
+#Check proportional hazards assumption
+test.ph<- cox.zph(modelC)
+test.ph
+
+########## Cox regression analysis Supplementary Table 2 Model 2 (ischemic)
+## Sex, age, chemo , Brain dose categories with >25 Gy stratified by full and partial volume
+##1 'RT to the neck, thorax, spine' 
+##2 'Brain RT, dose <=25 Gy'
+##3 'Brain RT, dose >25 Gy _ Full'
+##4 'Brain RT, dose >25 Gy _ Partial'.
+
+subset_cox$strokeisch <- ifelse(subset_cox$strokedef==0, 0, 
+                                ifelse((subset_cox$type_eerste_stroke==1 | subset_cox$type_eerste_stroke==2), 1, 
+                                       ifelse(subset_cox$type_eerste_stroke==3, 0, NA)))
+
+modelD <- coxph(Surv(time=entryage,time2=exitage,event=strokeisch) ~ sex+ chemo + as.factor(age_cc) + as.factor(BrainDoseCat_samengevoegd), data=subset_cox)
+summary(modelD)
+
+#Check proportional hazards assumption
+test.ph<- cox.zph(modelD)
+test.ph
+
+##############################
+########## Cox regression analysis Supplementary Table 3 
+## Sex, age, chemo, Brain dose (continuous variable /10 Gy) among those with full brain irradiation
+subset_fullRT <- subset(subset_cox, o_rt_Locatie_HeadRT_3cat_RTdos_numeric==3)
+
+## List variables necessary for this cox analysis
+sex2<-subset_fullRT$p_geslacht ## sex <-p_geslacht 
+chemo2<-subset_fullRT$th_ct_2inclrec ## chemo <- th_ct_2inclrec yes/no
+age_cc2<-subset_fullRT$strat_age_cc ## age at childhood cancer diagnosis <- strat_age_cc in categories (1= 0-5 (ref); 2 = >5-10; 3= >10-15; 4= >15-18)
+## time scale -> attained age
+entryage2 <- subset_fullRT$age_beginFU
+exitage2 <- subset_fullRT$age_endFU
+stroke2 <- subset_fullRT$filter_stroke
+## variables
+BrainDose_PerTien2<-subset_fullRT$BrainDose_PerTien
+
+modelE <- coxph(Surv(time=entryage2,time2=exitage2,event=stroke2) ~ sex2+ chemo2 + as.factor(age_cc2) + BrainDose_PerTien2, data=subset_fullRT)
+summary(modelE)
+
+#Check proportional hazards assumption
+test.ph<- cox.zph(modelE)
+test.ph
