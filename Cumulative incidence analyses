@@ -1,0 +1,251 @@
+##################################################################
+# Syntax Cumulative incidence analyses                           #
+# Long-term risk and characteristics of cerebrovascular events   #
+# after upper body radiotherapy among childhood cancer survivors #
+# in the DCCSS-LATER cohort                                      #
+##################################################################
+
+#############################################
+# LOAD THE NECESSARY LIBRARIES AND PACKAGES #
+#############################################
+library (survival)
+library (MASS)
+library (ggplot2)
+library (GGally)
+library (cmprsk)
+library (etm)
+library(scales)
+library(grid)
+library (gridExtra)
+library(haven)
+library(rlang)
+library(vctrs)
+library(forcats)
+library(hms)
+library(lifecycle)
+library(tibble)
+library(readr)
+library(lubridate)
+library(dplyr)
+##############################
+##Load data for cumulative incidence
+library(haven)
+data_stroke <- read_sav("H:/Jop/Lisanne upper body RT/Stroke/20220905 Clean_data_with_variables_for_cox_in_R.sav")
+
+## Only include survivors with >5 years follow-up and available data from medical files. 
+subset_dataframe <- subset(data_stroke, pat_recrd==2 & FUTime >=5)
+
+## List variables necessary for cumulative incidence analyses
+pseudoniem <- subset_dataframe$L201902_pseudoniem ## Pseudonymized number, upper body RT project ##
+diag_stroke <- subset_dataframe$diag_stroke ## Was survivor diagnosed with stroke 1) yes 2) no ##
+Incidt_kinderkanker<-subset_dataframe$t_incdat ## Childhood cancer incidence date ##
+date_stroke <- subset_dataframe$Datum_eerste_stroke ## Date of diagnosis first stroke ##
+status_ternary <-  subset_dataframe$status_ternary ##1 = stroke diagnosis; 2= deceased; 0=no stroke and alive
+Overlijdensdatum <- subset_dataframe$Overlijdensdatum ## Date of death
+FU_time_5yr <- subset_dataframe$FU_time_5yr ##  * FU_time_5yr = exit date - entry (5 years after childhood cancer diagnosis) date: follow-up since 5 year after childhood cancer diagnosis
+FUTime <- subset_dataframe$FUTime ## Follow-up since childhood cancer diagnosis
+
+##Start follow-up
+start <- 5
+
+subset_dataframe$start<-start
+
+##############################
+##Cumluative incidence analyses CVE (death as competing risk)
+
+FUPCICE<-etmCIF(Surv(start, FUTime, status_ternary!=0)~1,
+                data=subset_dataframe, etype=status_ternary, failcode=c(1,2))
+FUPCICE
+print(FUPCICE)
+
+summ.FUPCICE <- summary(FUPCICE)
+summ.FUPCICE
+
+test <- do.call(rbind.data.frame, summ.FUPCICE)
+
+#############################################
+
+table(subset_dataframe$status_ternary)
+
+#############################################
+CICE <- trprob(FUPCICE[[1]], "0 1", c(10,20,30,35,40, 50))
+
+VARoverall<-trcov(FUPCICE[[1]], "0 1", c(10,20,30,40, 50))
+SECE<- sqrt(VARoverall)
+lowCICE<- CICE- (SECE*1.96)
+hiCICE<- CICE+ (SECE*1.96)
+
+lowCICE
+hiCICE
+CICE
+#############################################
+
+#############################################
+## Create Figure 1A. Cumulative incidence of CVE, with Geom_step
+#############################################
+pdf("Figure 1A (geom_step).pdf", width=11.69, height=8.27)
+theme_set(theme_bw())
+ggplot(summ.FUPCICE[[1]][["CIF 1"]],aes(time,P))+
+  geom_step()+
+  geom_ribbon(data=summ.FUPCICE[[1]][["CIF 1"]],aes(ymin=lower,ymax=upper),fill=alpha("black",0.2))+
+  geom_step(data= summ.FUPCICE[[1]][["CIF 1"]],size=1, aes (colour="Diagnosis of stroke")) +
+  scale_x_continuous(breaks= c(5, 10, 15, 20, 25, 30, 35, 40, 45, 50 ), limits=c(5,50))+
+  scale_y_continuous(breaks=c(0.0, 0.1, 0.2, 0.3, 0.4), limits = c(0, 0.4), labels=percent)+
+  theme(axis.text.x=element_text(colour="black", size=16))+
+  theme(axis.text.y=element_text(colour="black", size=16))+
+  theme(axis.title.x=element_text(colour="black", size=20))+
+  theme(axis.title.y=element_text(colour="black", size=20))+
+  theme(axis.line=element_line(colour="black"))+
+  theme(axis.ticks=element_line(colour="black"))+
+  theme(panel.background = element_blank(), panel.grid.minor = element_blank(),
+        panel.grid.major.y = element_line(color="grey"),panel.grid.major.x = element_blank(),
+        panel.border=element_blank())+
+  xlab("Time since diagnosis childhood cancer (years)") + 
+  ylab("Cumulative incidence (%)")+
+  theme(legend.position="bottom")+
+  theme(legend.text = element_text(colour="black",size=20))+
+  scale_colour_manual(name=' ', values=c("Diagnosis of stroke"='black'))
+dev.off()
+#############################################
+#############################################
+
+#############################################
+## Cum inc per type stroke
+#############################################
+## List variabele  uit het Clean_data bestand ##
+##############################
+status_type_stroke_comprisk <-  subset_dataframe$status_type_stroke_comprisk 
+## 0 = geen stroke en niet overleden
+## 1 = TIA diagnose; 
+## 2 = Ischemia cerebrovascular (herseninfarct);
+## 3 = Intracranial hemorrhage (hersenbloeding);
+## 4 = geen stroke, overleden.
+
+## Bereken de cumulatieve incidentie van alle types stroke en overlijden
+##############################
+FUPCICE_typestroke<-etmCIF(Surv(start, FUTime, status_type_stroke_comprisk!=0)~ 1,
+                           data=subset_dataframe, etype=status_type_stroke_comprisk, failcode=c(1,2,3,4))
+FUPCICE_typestroke
+print(FUPCICE_typestroke)
+
+summ.FUPCICE_typestroke <- summary(FUPCICE_typestroke)
+summ.FUPCICE_typestroke
+
+test2 <- do.call(rbind.data.frame, summ.FUPCICE_typestroke)
+table(subset_dataframe$status_type_stroke_comprisk)
+
+#############################################
+CICE <- trprob(FUPCICE[[1]], "0 1", c(10,20,30,35,40, 50))
+
+VARoverall<-trcov(FUPCICE[[1]], "0 1", c(10,20,30,40, 50))
+SECE<- sqrt(VARoverall)
+lowCICE<- CICE- (SECE*1.96)
+hiCICE<- CICE+ (SECE*1.96)
+
+lowCICE
+hiCICE
+CICE
+#############################################
+#############################################
+## Create Figure 1B. Cumulative incidence by type of CVE, with Geom_step
+#############################################
+pdf("Figure 1B (geom_step).pdf", width=11.69, height=8.27)
+theme_set(theme_bw())
+ggplot(test2,aes(x=CIF.1.time))+
+  geom_ribbon(data=test2,aes(xmin=CIF.1.lower, xmax=CIF.1.upper, ymin=CIF.1.lower,ymax=CIF.1.upper),fill=alpha("gray 50",0.2))+
+  geom_step(data=test2,size=1, aes (y=CIF.1.P, colour="Transient ischemic attack"))+
+  geom_ribbon(data=test2,aes(xmin=CIF.2.lower, xmax=CIF.2.upper, ymin=CIF.2.lower,ymax=CIF.2.upper),fill=alpha("black",0.2))+
+  geom_step(data=test2,size=1, aes (y=CIF.2.P, colour="Ischemic CVE"))+
+  geom_ribbon(data=test2,aes(xmin=CIF.3.lower, xmax=CIF.3.upper, ymin=CIF.3.lower,ymax=CIF.3.upper),fill=alpha("gray 75",0.2))+
+  geom_step(data=test2,size=1, aes (y=CIF.3.P, colour="Hemorrhagic CVE"))+
+  scale_x_continuous(breaks= c(5,10,15,20,25,30,35,40,45,50,60), limits=c(5,50))+
+  scale_y_continuous(breaks=c(0.0, 0.1, 0.2, 0.3), limits = c(0, 0.3), labels=percent)+
+  theme(axis.text.x=element_text(colour="black", size=16))+
+  theme(axis.text.y=element_text(colour="black", size=16))+
+  theme(axis.title.x=element_text(colour="black", size=20))+
+  theme(axis.title.y=element_text(colour="black", size=20))+
+  theme(axis.line=element_line(colour="black"))+
+  theme(axis.ticks=element_line(colour="black"))+
+  theme(panel.background = element_blank(), panel.grid.minor = element_blank(),
+        panel.grid.major.y = element_line(color="grey"),panel.grid.major.x = element_blank(),
+        panel.border=element_blank())+
+  xlab("Time since diagnosis childhood cancer (years)") + 
+  ylab("Cumulative incidence (%)")+
+  theme(legend.position=c(0.2,0.8))+
+  theme(legend.text = element_text(colour="black",size=20))+
+  scale_colour_manual(name=' ', values=c("Transient ischemic attack"='gray 50', 
+                                         "Ischemic CVE"='black',
+                                         "Hemorrhagic CVE"='gray 75'), 
+                      breaks=c("Ischemic CVE",
+                               "Transient ischemic attack",
+                               "Hemorrhagic CVE"))
+
+dev.off()
+
+#############################################
+##############################
+##Cumluative incidence analyses CVE (death as competing risk)
+#############################################
+##Cranial RT
+subset_dataframe2 <- subset_dataframe[ which(subset_dataframe$BrainRT==1), ]
+
+FUPCICE2<-etmCIF(Surv(start, FUTime, status_ternary!=0)~1,
+                 data=subset_dataframe2, etype=status_ternary, failcode=c(1,2))
+FUPCICE2
+print(FUPCICE2)
+
+summ.FUPCICE2 <- summary(FUPCICE2)
+summ.FUPCICE2
+
+test2 <- do.call(rbind.data.frame, summ.FUPCICE2)
+
+test2$category <- "Cranial RT"
+
+##Neck/spine/thorax RT
+subset_dataframe3 <- subset_dataframe[ which(subset_dataframe$BrainRT==0), ]
+
+FUPCICE3<-etmCIF(Surv(start, FUTime, status_ternary!=0)~1,
+                 data=subset_dataframe3, etype=status_ternary, failcode=c(1,2))
+FUPCICE3
+print(FUPCICE3)
+
+summ.FUPCICE3 <- summary(FUPCICE3)
+summ.FUPCICE3
+
+test3 <- do.call(rbind.data.frame, summ.FUPCICE3)
+
+test3$category <- "No cranial RT (RT to neck/thorax/spine only)"
+
+test4 <- rbind(test2, test3)
+
+#############################################
+## Create Supplementary Figure 3. Cumulative incidence of CVE by cranial radiotherapy staus, with Geom_step
+#############################################
+pdf("Supplementary Figure 3 (geom_step).pdf", width=11.69, height=8.27)
+theme_set(theme_bw())
+ggplot(test4,aes(CIF.1.time,CIF.1.P,color=category))+
+  geom_step()+
+  geom_ribbon(data=test4,aes(ymin=CIF.1.lower,ymax=CIF.1.upper,fill=category, color=NA), show.legend=F, alpha=0.2)+
+  scale_fill_manual("",values=c("red", "blue"))+
+  scale_size_manual(values=c(1,1))+
+  scale_x_continuous(breaks= c(5, 10, 15, 20, 25, 30, 35, 40, 45, 50), limits=c(5,50))+
+  scale_y_continuous(breaks=c(0.0, 0.1, 0.2, 0.3, 0.4, 0.5), limits = c(0, 0.5), labels=percent)+
+  theme(axis.text.x=element_text(colour="black", size=16))+
+  theme(axis.text.y=element_text(colour="black", size=16))+
+  theme(axis.title.x=element_text(colour="black", size=20))+
+  theme(axis.title.y=element_text(colour="black", size=20))+
+  theme(axis.line=element_line(colour="black"))+
+  theme(axis.ticks=element_line(colour="black"))+
+  theme(panel.background = element_blank(), panel.grid.minor = element_blank(),
+        panel.grid.major.y = element_line(color="grey"),panel.grid.major.x = element_blank(),
+        panel.border=element_blank())+
+  xlab("Time since diagnosis childhood cancer (years)") + 
+  ylab("Cumulative incidence (%)")+
+  guides(fill = FALSE)+
+  theme(legend.position=c(0.3,0.85))+
+  theme(legend.text = element_text(colour="black",size=20))+
+  scale_colour_manual(name=' ', values=c("Cranial RT"='red', 
+                                         "No cranial RT (RT to neck/thorax/spine only)"='blue'), 
+                      breaks=c("Cranial RT",
+                               "No cranial RT (RT to neck/thorax/spine only)"))
+dev.off()
