@@ -1,0 +1,25 @@
+* Encoding: UTF-8.
+** SPSS logistic regression analyses CVE including lifestyle factors
+*p_geslacht=sex
+*th_ct_2inclrec=chemotherapy yes/no
+*BrainDose=delivered radiation dose to the brain (continuous variable)
+*age_cc_diag=age at childhood cancer diagnosis (continuous variable)
+*KR_hypertensie=hypertension yes/no
+*Roken_dagelijks=daily smoking yes/no
+*BMI_cat_obesitas=obesity yes vs. no (BMI ≥30 vs. <30)
+*inactive=not physically inactive [sedentary job and no recreational activity] vs. moderately inactive, moderately active or active
+*age_endFU=age at end of follow-up
+*strokedef=CVE yes/no
+
+LOGISTIC REGRESSION VARIABLES strokedef
+  /METHOD=ENTER  p_geslacht th_ct_2inclrec BrainDose age_cc_diag KR_Hypertensie Roken_dagelijks BMI_cat_obesitas inactive age_endFU
+  /CONTRAST (p_geslacht)=Indicator(1)
+  /CONTRAST (th_ct_2inclrec)=Indicator(1)
+  /CONTRAST (KR_Hypertensie)=Indicator(1)
+  /CONTRAST (Roken_dagelijks)=Indicator(1)
+  /CONTRAST (BMI_cat_obesitas)=Indicator(1)
+  /CONTRAST (inactive)=Indicator(1)
+  /PRINT=CI(95)
+  /CRITERIA=PIN(0.05) POUT(0.10) ITERATE(20) CUT(0.5).
+
+
